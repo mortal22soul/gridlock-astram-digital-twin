@@ -1,0 +1,14 @@
+pandas
+numpy
+xgboost
+lightgbm
+scikit-learn
+shap
+streamlit
+plotly
+folium
+streamlit-folium
+jupyter
+geopandas
+shapely
+scipy

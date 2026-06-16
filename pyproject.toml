@@ -1,0 +1,9 @@
+[project]
+name = "gridlock-2-0-round-2"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "matplotlib>=3.11.0",
+]
