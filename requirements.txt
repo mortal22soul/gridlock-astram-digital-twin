@@ -12,3 +12,4 @@ jupyter
 geopandas
 shapely
 scipy
+matplotlib

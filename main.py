@@ -1,5 +1,27 @@
-def main():
-    print("Hello from gridlock-2-0-round-2!")
+"""
+Entry point for the ASTraM Digital Twin Command Center.
+
+Usage
+-----
+    uv run python main.py          # prints launch instructions
+    uv run streamlit run app/app.py  # launches the dashboard directly
+"""
+
+import os
+import sys
+
+
+def main() -> None:
+    print("ASTraM Mobility Digital Twin Command Center")
+    print("=" * 44)
+    print()
+    print("To launch the dashboard, run:")
+    print()
+    print("    uv run streamlit run app/app.py")
+    print()
+    print("Models must be present in models/ before starting.")
+    print("If missing, execute notebooks/01_eda_and_cleaning.ipynb")
+    print("then notebooks/02_model_training.ipynb first.")
 
 
 if __name__ == "__main__":
