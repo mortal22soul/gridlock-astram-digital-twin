@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import pickle
-from streamlit_folium import st_folium
+import pydeck as pdk
 import components
 from heuristics import get_resource_recommendation
 import os
@@ -12,10 +12,7 @@ st.set_page_config(page_title="ASTraM Digital Twin Command Center", layout="wide
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Prefer enriched dataset (has OSM columns); fall back to cleaned if not present.
-_ENRICHED = os.path.join(BASE_DIR, '../data/enriched_astram_events.csv')
-_CLEANED  = os.path.join(BASE_DIR, '../data/cleaned_astram_events.csv')
-DATA_PATH = _ENRICHED if os.path.exists(_ENRICHED) else _CLEANED
+DATA_PATH = os.path.join(BASE_DIR, '../data/augmented_astram_events.csv')
 
 
 @st.cache_resource
@@ -115,9 +112,9 @@ st.markdown("Predictive layer for early incident mitigation and resource allocat
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.subheader("Historical Risk Heatmap")
-    m = components.render_heatmap(df)
-    st_folium(m, width=800, height=500, returned_objects=[])
+    st.subheader("Historical Risk Heatmap (3D Hexagon)")
+    deck = components.render_heatmap(df)
+    st.pydeck_chart(deck)
 
     st.plotly_chart(components.plot_trend(df), width='stretch')
 
@@ -129,7 +126,15 @@ with col2:
         priority  = st.selectbox("Priority", ['High', 'Low'])
 
         hour      = st.slider("Hour of Day",               0, 23, 12)
-        dayofweek = st.slider("Day of Week (0=Mon, 6=Sun)", 0,  6,  0)
+        day_mapping = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
+        day_str   = st.selectbox("Day of Week", list(day_mapping.keys()))
+        dayofweek = day_mapping[day_str]
+        precip    = st.slider("Expected Rain (mm/hr)",      0.0, 50.0, 0.0)
+
+        with st.expander("OSM Properties", expanded=False):
+            osm_class = st.selectbox("OSM Highway Class", sorted(df['osm_highway_class'].dropna().unique()))
+            osm_lanes = st.number_input("OSM Lanes", min_value=1.0, max_value=10.0, value=2.0, step=1.0)
+            dist_road = st.number_input("Distance to Nearest Road (m)", min_value=0.0, value=5.0, step=0.1)
 
         submitted = st.form_submit_button("Simulate Impact")
 
@@ -144,10 +149,12 @@ with col2:
         c_cause = _encode(encoders, 'event_cause', cause)
         c_corr  = _encode(encoders, 'corridor',    corridor)
         c_prio  = _encode(encoders, 'priority',    priority)
+        c_osm   = _encode(encoders, 'osm_highway_class', osm_class)
 
         features = np.array([[c_cause, c_corr, c_prio,
                                hour, dayofweek, is_weekend,
-                               c_1d, c_7d, c_30d]])
+                               c_1d, c_7d, c_30d, precip,
+                               c_osm, osm_lanes, dist_road]])
 
         # ── Predictions ──────────────────────────────────────────────────────
 
@@ -186,4 +193,8 @@ with col2:
                 "corridor_count_1d":   c_1d,
                 "corridor_count_7d":   c_7d,
                 "corridor_count_30d":  c_30d,
+                "precipitation_mm":    precip,
+                "osm_highway_class":   osm_class,
+                "osm_lanes":           osm_lanes,
+                "dist_to_nearest_road_m": dist_road,
             })

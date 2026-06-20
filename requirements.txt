@@ -8,6 +8,7 @@ streamlit
 plotly
 folium
 streamlit-folium
+pydeck
 jupyter
 geopandas
 shapely

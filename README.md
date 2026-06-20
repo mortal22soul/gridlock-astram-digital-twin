@@ -17,7 +17,7 @@ Instead of relying heavily on expensive, delayed camera-feed analyses, this prot
 - **Closure Probability Model (XGBoost Classifier):** Calculates the percentage risk that a specific event will necessitate a carriageway closure. Achieves a strong **0.76 AUC** baseline.
 - **Rule-Based Resource Engine:** Translates predicted severity buckets into actionable ground deployments so the Control Room can act instantly.
 - **Geospatial Risk Heatmap:** Visualizes historical hotspots across the Bengaluru road network using Folium.
-- **OSM Network Enrichment (Optional):** Incorporates OpenStreetMap road classes (e.g., _primary_, _trunk_, _residential_) via a rapid `GeoPandas` nearest-neighbor spatial join for enhanced modeling signal.
+- **OSM & Weather Enrichment:** Automatically fetches hourly precipitation from Open-Meteo and incorporates OpenStreetMap road infrastructure (e.g., highway class, lanes) via a rapid `GeoPandas` nearest-neighbor spatial join for enhanced modeling signal.
 
 ## 📂 Project Architecture
 
@@ -27,12 +27,15 @@ Instead of relying heavily on expensive, delayed camera-feed analyses, this prot
 │   ├── components.py      # Map rendering and UI visualization modules
 │   └── heuristics.py      # Rule-based resource allocation engine
 ├── notebooks/
-│   ├── 01_eda_and_cleaning.ipynb      # Data ingestion, UTC->IST conversion, cleaning
-│   ├── 02_model_training.ipynb        # Time-walk forward splits, XGBoost modeling, SHAP
-│   └── 03_osm_enrichment_optional.ipynb # Spatial joins using GeoPandas
-├── data/                  # Cleaned and processed tabular datasets
+│   ├── 01_eda_and_cleaning.ipynb      # Data ingestion, cleaning, OSM & Weather enrichment
+│   └── 02_model_training.ipynb        # Walk-forward splits, XGBoost modeling with OSM features
+├── docs/
+│   ├── PRESENTATION.md    # 10-slide pitch deck outline
+│   └── VIDEO_SCRIPT.md    # Demo video script
+├── data/                  # Augmented datasets (OSM + Weather)
 ├── models/                # Serialized XGBoost models (.json) & Label Encoders
 ├── requirements.txt       # Core dependencies
+├── SUBMISSION.md          # Hackathon submission template
 └── README.md              # You are here!
 ```
 
@@ -55,13 +58,12 @@ uv pip install -r requirements.txt
 
 ### 2. Running the Data Pipeline (Optional)
 
-The models are already pre-trained and serialized in the `/models` directory. However, if you wish to re-train the models from scratch using the ASTraM CSV:
+The models are already pre-trained and serialized in the `/models` directory. However, if you wish to regenerate the augmented dataset and re-train the models from scratch:
 
 ```powershell
-uv run jupyter notebook
+uv run jupyter nbconvert --to notebook --execute notebooks/01_eda_and_cleaning.ipynb --inplace
+uv run jupyter nbconvert --to notebook --execute notebooks/02_model_training.ipynb --inplace
 ```
-
-Execute `notebooks/01_eda_and_cleaning.ipynb` followed by `notebooks/02_model_training.ipynb`.
 
 ### 3. Launching the Command Center Dashboard
 

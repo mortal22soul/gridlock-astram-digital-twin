@@ -9,7 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Streamlit App OSM Integration**: Added `osm_highway_class`, `osm_lanes`, and `dist_to_nearest_road_m` inputs to the incident simulator form in `app/app.py`.
 - Comprehensive `README.md` containing project architecture, modeling strategy, and setup instructions.
+- Added `pydeck` to `requirements.txt`.
+
+### Changed
+
+- **Data Pipeline Consolidation**: Merged `03_osm_enrichment_optional.ipynb` and `scripts/enrich_weather.py` into `01_eda_and_cleaning.ipynb`. The pipeline is now exactly two linear notebooks: one for EDA/cleaning/enrichment and one for model training.
+- **Mandatory OSM Features**: OSM properties (`osm_highway_class`, `osm_lanes`, `dist_to_nearest_road_m`) are now included as core features in the XGBoost models. The optional notebooks and scripts were removed.
+
+### Fixed
+
+- **Weather Merge Duplication**: Fixed a Cartesian join bug where `pd.merge` inflated row counts by 3,283 due to pandas `dt.round('h')` mapping exactly half-hour UTC boundaries to duplicate hours. The weather dataframe is now grouped by `merge_hour` before the join.
 
 ## [1.1.0] - 2026-06-16
 

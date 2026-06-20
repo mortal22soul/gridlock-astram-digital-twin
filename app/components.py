@@ -1,5 +1,4 @@
-import folium
-from folium.plugins import HeatMap
+import pydeck as pdk
 import plotly.express as px
 import pandas as pd
 
@@ -8,14 +7,8 @@ _LAT_MIN, _LAT_MAX = 12.0, 13.5
 _LON_MIN, _LON_MAX = 77.0, 78.0
 
 
-def render_heatmap(df: pd.DataFrame) -> folium.Map:
-    """Render a light-theme Folium heatmap weighted by severity_score."""
-    m = folium.Map(
-        location=[12.9716, 77.5946],
-        zoom_start=11,
-        tiles="cartodbpositron",
-    )
-
+def render_heatmap(df: pd.DataFrame) -> pdk.Deck:
+    """Render a dark-theme PyDeck 3D Hexagon heatmap weighted by severity_score."""
     clean_df = df.dropna(subset=['latitude', 'longitude'])
     clean_df = clean_df[
         (clean_df['latitude']  > _LAT_MIN) & (clean_df['latitude']  < _LAT_MAX) &
@@ -23,12 +16,48 @@ def render_heatmap(df: pd.DataFrame) -> folium.Map:
     ]
 
     if clean_df.empty:
-        return m
+        # Return an empty map centered on Bengaluru
+        return pdk.Deck(
+            map_style='dark',
+            initial_view_state=pdk.ViewState(
+                latitude=12.9716,
+                longitude=77.5946,
+                zoom=11,
+                pitch=50,
+            )
+        )
 
-    # Vectorised — avoids slow iterrows() over thousands of rows
-    heat_data = clean_df[['latitude', 'longitude', 'severity_score']].values.tolist()
-    HeatMap(heat_data, radius=15, max_zoom=13).add_to(m)
-    return m
+    # Define the PyDeck HexagonLayer
+    layer = pdk.Layer(
+        'HexagonLayer',
+        data=clean_df,
+        get_position='[longitude, latitude]',
+        radius=40,
+        coverage=0.8,
+        opacity=0.6,
+        elevation_scale=8,
+        elevation_range=[0, 1000],
+        pickable=True,
+        extruded=True,
+        get_elevation_weight='severity_score',
+    )
+
+    # Set the viewport location
+    view_state = pdk.ViewState(
+        latitude=12.9716,
+        longitude=77.5946,
+        zoom=11,
+        pitch=50,
+    )
+
+    # Render
+    deck = pdk.Deck(
+        layers=[layer],
+        initial_view_state=view_state,
+        map_style='dark',
+        tooltip={"text": "Incidents"}
+    )
+    return deck
 
 
 def plot_trend(df: pd.DataFrame):
