@@ -2,8 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import xgboost as xgb
-import pickle
-import pydeck as pdk
+import json
 import components
 from heuristics import get_resource_recommendation
 import os
@@ -23,10 +22,10 @@ def load_models():
     closure_model = xgb.XGBClassifier()
     closure_model.load_model(os.path.join(BASE_DIR, '../models/closure_model.json'))
 
-    with open(os.path.join(BASE_DIR, '../models/label_encoders.pkl'), 'rb') as f:
-        encoders = pickle.load(f)
+    with open(os.path.join(BASE_DIR, '../models/category_mappings.json'), 'r') as f:
+        cat_mappings = json.load(f)
 
-    return duration_model, closure_model, encoders
+    return duration_model, closure_model, cat_mappings
 
 
 @st.cache_data
@@ -38,39 +37,32 @@ def load_data() -> pd.DataFrame:
     # High priority + closure → 3, High priority only → 2, Low → 1
     if 'severity_score' not in df.columns:
         conditions = [
-            (df['priority'] == 'High') & (df['requires_road_closure'] == True),
+            (df['priority'] == 'High') & (df['requires_road_closure'] is True),
             (df['priority'] == 'High'),
         ]
         df['severity_score'] = np.select(conditions, [3, 2], default=1)
     return df
 
 
-def _encode(encoders: dict, field: str, value: str) -> int:
-    """Encode a categorical value, returning -1 and surfacing a warning if unseen."""
-    le = encoders[field]
-    if value in le.classes_:
-        return int(le.transform([value])[0])
-    st.warning(f"'{value}' is not in the training vocabulary for **{field}**. "
-               "Prediction may be less accurate.")
-    # Fall back to the most-frequent class (index 0 after label-encoding is arbitrary,
-    # so we use the class that appears at position 0 in the sorted encoder classes).
-    return 0
 
 
-def _compute_rolling_counts(df: pd.DataFrame, corridor: str) -> tuple[int, int, int]:
+
+def _compute_rolling_counts(df: pd.DataFrame, corridor: str, dayofweek: int) -> tuple[int, int, int]:
     """
-    Approximate the corridor rolling-count features from the loaded historical data.
-
-    These features were present during training; passing zeros causes systematic
-    under-prediction on busy corridors.  Using historical counts is the closest
-    approximation available at inference time without a live event stream.
+    Return the historical average rolling counts for the selected corridor and day of week.
+    This provides a much more accurate baseline congestion feature for the simulator than
+    the static end-of-dataset approach.
     """
-    corridor_df = df[df['corridor'] == corridor]
-    latest = df['start_datetime'].max()  # treat most-recent event as 'now'
-
-    c_1d  = int((corridor_df['start_datetime'] > latest - pd.Timedelta('1D')).sum())
-    c_7d  = int((corridor_df['start_datetime'] > latest - pd.Timedelta('7D')).sum())
-    c_30d = int((corridor_df['start_datetime'] > latest - pd.Timedelta('30D')).sum())
+    subset = df[(df['corridor'] == corridor) & (df['start_datetime'].dt.dayofweek == dayofweek)]
+    if subset.empty:
+        subset = df[df['corridor'] == corridor]  # Fallback to corridor average across all days
+    
+    if subset.empty:
+        return 0, 0, 0
+    
+    c_1d = int(subset['corridor_count_1d'].mean())
+    c_7d = int(subset['corridor_count_7d'].mean())
+    c_30d = int(subset['corridor_count_30d'].mean())
     return c_1d, c_7d, c_30d
 
 
@@ -96,7 +88,7 @@ if not os.path.exists(os.path.join(BASE_DIR, '../models/duration_model.json')):
     st.stop()
 
 try:
-    dur_model, clos_model, encoders = load_models()
+    dur_model, clos_model, cat_mappings = load_models()
     df = load_data()
 except Exception as e:
     st.error(f"Error loading models or data: {e}")
@@ -125,41 +117,80 @@ with col2:
         corridor  = st.selectbox("Corridor",    sorted(df['corridor'].dropna().unique()))
         priority  = st.selectbox("Priority", ['High', 'Low'])
 
-        hour      = st.slider("Hour of Day",               0, 23, 12)
+        hour      = st.slider("Hour of Day", 0, 23, 12)
         day_mapping = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
         day_str   = st.selectbox("Day of Week", list(day_mapping.keys()))
         dayofweek = day_mapping[day_str]
-        precip    = st.slider("Expected Rain (mm/hr)",      0.0, 50.0, 0.0)
+        precip    = st.slider("Expected Rain (mm/hr)", 0.0, 50.0, 0.0)
+
+        # Compute dynamic spatial defaults based on the selected corridor
+        corridor_df = df[df['corridor'] == corridor]
+        def_lanes = 2.0
+        def_dist = 5.0
+        def_class_idx = 0
+        osm_options = sorted(df['osm_highway_class'].dropna().unique())
+
+        if not corridor_df.empty:
+            if not corridor_df['osm_lanes'].mode().empty:
+                def_lanes = float(corridor_df['osm_lanes'].mode()[0])
+            if not corridor_df['dist_to_nearest_road_m'].empty:
+                def_dist = float(corridor_df['dist_to_nearest_road_m'].median())
+            if not corridor_df['osm_highway_class'].mode().empty:
+                osm_mode = corridor_df['osm_highway_class'].mode()[0]
+                if osm_mode in osm_options:
+                    def_class_idx = osm_options.index(osm_mode)
 
         with st.expander("OSM Properties", expanded=False):
-            osm_class = st.selectbox("OSM Highway Class", sorted(df['osm_highway_class'].dropna().unique()))
-            osm_lanes = st.number_input("OSM Lanes", min_value=1.0, max_value=10.0, value=2.0, step=1.0)
-            dist_road = st.number_input("Distance to Nearest Road (m)", min_value=0.0, value=5.0, step=0.1)
+            osm_class = st.selectbox("OSM Highway Class", osm_options, index=def_class_idx)
+            osm_lanes = st.number_input("OSM Lanes", min_value=1.0, max_value=10.0, value=def_lanes, step=1.0)
+            dist_road = st.number_input("Distance to Nearest Road (m)", min_value=0.0, value=def_dist, step=0.1)
 
         submitted = st.form_submit_button("Simulate Impact")
 
     if submitted:
         is_weekend = 1 if dayofweek in [5, 6] else 0
 
-        # Rolling corridor counts — computed from historical data rather than
-        # hardcoded to 0, which would degrade predictions on busy corridors.
-        c_1d, c_7d, c_30d = _compute_rolling_counts(df, corridor)
+        # Rolling corridor counts dynamically adapt to historical day-of-week averages
+        c_1d, c_7d, c_30d = _compute_rolling_counts(df, corridor, dayofweek)
 
-        # Encode categoricals with graceful fallback for unseen labels
-        c_cause = _encode(encoders, 'event_cause', cause)
-        c_corr  = _encode(encoders, 'corridor',    corridor)
-        c_prio  = _encode(encoders, 'priority',    priority)
-        c_osm   = _encode(encoders, 'osm_highway_class', osm_class)
+        # Warn on unseen categorical values
+        for field, value in [('event_cause', cause), ('corridor', corridor),
+                              ('priority', priority), ('osm_highway_class', osm_class)]:
+            if value not in cat_mappings.get(field, []):
+                st.warning(f"'{value}' is not in the training vocabulary for **{field}**. "
+                           "Prediction may be less accurate.")
 
-        features = np.array([[c_cause, c_corr, c_prio,
-                               hour, dayofweek, is_weekend,
-                               c_1d, c_7d, c_30d, precip,
-                               c_osm, osm_lanes, dist_road]])
+        # Build a 1-row DataFrame with the proper category dtypes so that
+        # XGBoost's native categorical support (enable_categorical=True)
+        # recognises each cause/corridor/class as a distinct entity.
+        feature_names = [
+            'event_cause', 'corridor', 'priority',
+            'hour', 'dayofweek', 'is_weekend',
+            'corridor_count_1d', 'corridor_count_7d', 'corridor_count_30d',
+            'precipitation_mm',
+            'osm_highway_class', 'osm_lanes', 'dist_to_nearest_road_m'
+        ]
+        row = {
+            'event_cause': cause, 'corridor': corridor, 'priority': priority,
+            'hour': hour, 'dayofweek': dayofweek, 'is_weekend': is_weekend,
+            'corridor_count_1d': float(c_1d), 'corridor_count_7d': float(c_7d),
+            'corridor_count_30d': float(c_30d), 'precipitation_mm': precip,
+            'osm_highway_class': osm_class, 'osm_lanes': osm_lanes,
+            'dist_to_nearest_road_m': dist_road,
+        }
+        features_df = pd.DataFrame([row], columns=feature_names)
 
-        # ── Predictions ──────────────────────────────────────────────────────
+        # Apply the same CategoricalDtype used during training
+        for col in ['event_cause', 'corridor', 'priority', 'osm_highway_class']:
+            cat_type = pd.CategoricalDtype(
+                categories=cat_mappings[col], ordered=False
+            )
+            features_df[col] = features_df[col].astype(cat_type)
 
-        clos_prob    = float(clos_model.predict_proba(features)[0][1])
-        dur_log      = float(dur_model.predict(features)[0])
+        # -- Predictions -------------------------------------------------------
+
+        clos_prob    = float(clos_model.predict_proba(features_df)[0][1])
+        dur_log      = float(dur_model.predict(features_df)[0])
         dur_minutes  = float(np.expm1(dur_log))
 
         # Severity bucket uses continuous clos_prob, not a hard 0.5 threshold

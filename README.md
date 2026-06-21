@@ -18,6 +18,7 @@ Instead of relying heavily on expensive, delayed camera-feed analyses, this prot
 - **Rule-Based Resource Engine:** Translates predicted severity buckets into actionable ground deployments so the Control Room can act instantly.
 - **Geospatial Risk Heatmap:** Visualizes historical hotspots across the Bengaluru road network using Folium.
 - **OSM & Weather Enrichment:** Automatically fetches hourly precipitation from Open-Meteo and incorporates OpenStreetMap road infrastructure (e.g., highway class, lanes) via a rapid `GeoPandas` nearest-neighbor spatial join for enhanced modeling signal.
+- **Efficient Preprocessing:** Handles missing values and merges historical weather data (accounting for IST/UTC alignments). Uses native Pandas `category` dtypes for categorical features, bypassing the need for manual Label Encoding.
 
 ## 📂 Project Architecture
 
