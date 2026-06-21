@@ -6,7 +6,11 @@ import json
 import components
 from heuristics import get_resource_recommendation
 from feature_engineering import engineer_features
+from traffic import get_traffic_flow, get_corridor_centroid
+from weather import get_current_weather
+from holidays import get_holiday_context
 import os
+import datetime
 
 st.set_page_config(page_title="ASTraM Digital Twin Command Center", layout="wide", page_icon="🚦")
 
@@ -85,6 +89,10 @@ if not os.path.exists(os.path.join(BASE_DIR, '../models/duration_model.json')) o
     st.warning("Models not found. Please run the Jupyter notebooks in `notebooks/` first.")
     st.stop()
 
+if not os.path.exists(DATA_PATH):
+    st.error(f"Data file not found at `{DATA_PATH}`. Please run `notebooks/01_eda_and_cleaning.ipynb` first.")
+    st.stop()
+
 try:
     dur_xgb, clos_xgb, dur_cb, clos_cb, cat_mappings = load_models()
     df = load_data()
@@ -117,17 +125,47 @@ with col1:
 
 with col2:
     st.subheader("Incident Simulator")
+    
+    sim_date = st.date_input("Simulation Date", value=datetime.date.today())
+    
+    # --- LIVE CONTEXT ---
+    weather_data = get_current_weather()
+    holiday = get_holiday_context(sim_date)
+    
+    if weather_data or holiday:
+        st.markdown("##### 🌍 Live Context")
+        if holiday:
+            st.warning(f"⚠️ **Major Event Today:** {holiday}. Expect abnormal traffic patterns.")
+        
+        if weather_data:
+            w_col1, w_col2, w_col3 = st.columns(3)
+            w_col1.metric("Weather", weather_data["description"])
+            w_col2.metric("Temp", f"{weather_data['temperature_c']}°C")
+            w_col3.metric("Rain", f"{weather_data['precipitation_mm']} mm")
+        st.markdown("---")
+    # --------------------
+
     with st.form("simulator_form"):
         engine    = st.radio("Model Engine", ["CatBoost", "XGBoost"], horizontal=True)
-        cause     = st.selectbox("Event Cause", sorted(df['event_cause'].dropna().unique()))
-        corridor  = st.selectbox("Corridor",    sorted(df['corridor'].dropna().unique()))
+        
+        f_col1, f_col2 = st.columns(2)
+        with f_col1:
+            cause     = st.selectbox("Event Cause", sorted(df['event_cause'].dropna().unique()))
+        with f_col2:
+            corridor  = st.selectbox("Corridor",    sorted(df['corridor'].dropna().unique()))
+            
         priority  = st.selectbox("Priority", ['High', 'Low'])
 
         hour      = st.slider("Hour of Day", 0, 23, 12)
-        day_mapping = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
-        day_str   = st.selectbox("Day of Week", list(day_mapping.keys()))
-        dayofweek = day_mapping[day_str]
-        precip    = st.slider("Expected Rain (mm/hr)", 0.0, 50.0, 0.0)
+        
+        f_col3, f_col4 = st.columns(2)
+        with f_col3:
+            day_mapping = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
+            day_str   = st.selectbox("Day of Week", list(day_mapping.keys()))
+            dayofweek = day_mapping[day_str]
+        with f_col4:
+            default_precip = float(weather_data['precipitation_mm']) if weather_data else 0.0
+            precip    = st.number_input("Expected Rain (mm/hr) - Pre-filled with Live Data", min_value=0.0, max_value=50.0, value=default_precip, step=0.1)
 
         # Compute dynamic spatial defaults based on the selected corridor
         corridor_df = df[df['corridor'] == corridor]
@@ -189,8 +227,12 @@ with col2:
         # Apply the same CategoricalDtype used during XGBoost training
         # (CatBoost safely accepts and handles these natively as well)
         for col in ['event_cause', 'corridor', 'priority', 'osm_highway_class']:
+            categories = cat_mappings.get(col, [])
+            if not categories:
+                st.warning(f"No category mapping found for **{col}** -- skipping dtype conversion.")
+                continue
             cat_type = pd.CategoricalDtype(
-                categories=cat_mappings[col], ordered=False
+                categories=categories, ordered=False
             )
             features_df[col] = features_df[col].astype(cat_type)
 
@@ -212,6 +254,14 @@ with col2:
         # ── Results display ───────────────────────────────────────────────────
 
         st.markdown("### Prediction Results")
+        
+        # Display Live Traffic Context if available
+        centroid = get_corridor_centroid(df, corridor)
+        if centroid:
+            traffic_data = get_traffic_flow(centroid[0], centroid[1])
+            if traffic_data:
+                components.render_traffic_badge(traffic_data)
+
         col_m1, col_m2, col_m3 = st.columns(3)
         col_m1.metric("Est. Duration",  f"{dur_minutes:.0f} mins")
         col_m2.metric("Closure Prob.",  f"{clos_prob * 100:.1f}%")

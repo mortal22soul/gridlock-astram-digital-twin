@@ -21,7 +21,8 @@ def main() -> None:
     print()
     print("Models must be present in models/ before starting.")
     print("If missing, execute notebooks/01_eda_and_cleaning.ipynb")
-    print("then notebooks/02_model_training.ipynb first.")
+    print("then notebooks/02_xgboost_model_training.ipynb first.")
+    print("and notebooks/03_catboost_model_training.ipynb.")
 
 
 if __name__ == "__main__":

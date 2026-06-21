@@ -4,8 +4,8 @@ import sys
 import os
 import json
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from app.feature_engineering import engineer_features
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.abspath(os.path.join(BASE_DIR, '..')))
 
 # We can import models directly via catboost and xgboost, or use app's loader
 import xgboost as xgb
@@ -13,18 +13,18 @@ from catboost import CatBoostRegressor, CatBoostClassifier
 
 def load_models():
     dur_xgb = xgb.XGBRegressor()
-    dur_xgb.load_model('models/duration_model.json')
+    dur_xgb.load_model(os.path.join(BASE_DIR, '../models/duration_model.json'))
 
     clos_xgb = xgb.XGBClassifier()
-    clos_xgb.load_model('models/closure_model.json')
+    clos_xgb.load_model(os.path.join(BASE_DIR, '../models/closure_model.json'))
 
     dur_cb = CatBoostRegressor()
-    dur_cb.load_model('models/duration_model_cb.cbm')
+    dur_cb.load_model(os.path.join(BASE_DIR, '../models/duration_model_cb.cbm'))
 
     clos_cb = CatBoostClassifier()
-    clos_cb.load_model('models/closure_model_cb.cbm')
+    clos_cb.load_model(os.path.join(BASE_DIR, '../models/closure_model_cb.cbm'))
 
-    with open('models/category_mappings.json', 'r') as f:
+    with open(os.path.join(BASE_DIR, '../models/category_mappings.json'), 'r') as f:
         cat_mappings = json.load(f)
 
     return dur_xgb, clos_xgb, dur_cb, clos_cb, cat_mappings
@@ -85,7 +85,10 @@ def main():
         
         # Apply categorical dtypes as required by XGBoost natively
         for col in ['event_cause', 'corridor', 'priority', 'osm_highway_class']:
-            cat_type = pd.CategoricalDtype(categories=cat_mappings[col], ordered=False)
+            categories = cat_mappings.get(col, [])
+            if not categories:
+                continue
+            cat_type = pd.CategoricalDtype(categories=categories, ordered=False)
             df[col] = df[col].astype(cat_type)
 
         # Predict

@@ -99,13 +99,44 @@ def plot_trend(df: pd.DataFrame):
         .rename(columns={'start_datetime': 'date'})
     )
 
+    # Calculate 7-day moving average
+    trend['7-Day MA'] = trend['count'].rolling(window=7, min_periods=1).mean()
+
     fig = px.line(
         trend,
         x='date',
-        y='count',
+        y=['count', '7-Day MA'],
         template="plotly_dark",
         title="Daily Incident Trend",
-        labels={'date': 'Date', 'count': 'Incidents'},
+        labels={'date': 'Date', 'value': 'Incidents', 'variable': 'Metric'},
+        color_discrete_map={'count': '#636EFA', '7-Day MA': '#EF553B'}
     )
-    fig.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=250)
+    fig.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=250, legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01))
     return fig
+
+def render_traffic_badge(traffic_data: dict):
+    """Render a colored badge for live traffic congestion."""
+    import streamlit as st
+    ratio = traffic_data["congestion_ratio"]
+    curr = traffic_data["current_speed_kmh"]
+    free = traffic_data["free_flow_speed_kmh"]
+    
+    if ratio < 0.5:
+        color = "#ff4b4b" # Red
+        status = "Heavy Congestion"
+    elif ratio < 0.8:
+        color = "#ffa421" # Orange
+        status = "Moderate Traffic"
+    else:
+        color = "#00c853" # Green
+        status = "Free Flowing"
+        
+    st.markdown(
+        f"""
+        <div style="padding: 10px; border-radius: 5px; background-color: {color}20; border: 1px solid {color}; margin-bottom: 10px;">
+            <strong style="color: {color}; font-size: 1.1em;">🚦 Live Traffic: {status}</strong><br/>
+            Current Speed: <b>{curr} km/h</b> (Free flow: {free} km/h)
+        </div>
+        """,
+        unsafe_allow_html=True
+    )

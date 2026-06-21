@@ -12,6 +12,7 @@ class ResourcePlan(TypedDict):
 # Lookup table: severity bucket → resource plan.
 # Framed as a heuristic starting point — could become a learned policy once
 # real dispatch/deployment logs are available (none exist in the current schema).
+
 _PLANS: dict[int, ResourcePlan] = {
     0: ResourcePlan(
         Level="Low",

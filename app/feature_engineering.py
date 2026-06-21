@@ -25,11 +25,14 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     
     # Robustly compute rolling counts per group and assign back via original integer index
     # to perfectly prevent index-scrambling (which occurs if simply resetting index from groupby)
+    # Use 'id' for rolling count if it exists, otherwise use an arbitrary column or create a dummy one
+    count_col = 'id' if 'id' in df.columns else 'corridor'
+    
     for corridor, group in df.groupby('corridor', dropna=False):
         group_time_idx = group.set_index('start_datetime')
-        c1d = group_time_idx['id'].rolling('1D').count().values - 1
-        c7d = group_time_idx['id'].rolling('7D').count().values - 1
-        c30d = group_time_idx['id'].rolling('30D').count().values - 1
+        c1d = group_time_idx[count_col].rolling('1D').count().values - 1
+        c7d = group_time_idx[count_col].rolling('7D').count().values - 1
+        c30d = group_time_idx[count_col].rolling('30D').count().values - 1
         
         df.loc[group.index, 'corridor_count_1d'] = c1d
         df.loc[group.index, 'corridor_count_7d'] = c7d
@@ -39,7 +42,8 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df['osm_lanes'] = df['osm_lanes'].fillna(2.0)
     # The dist_to_nearest_road_m defaults to 0.0 or median; fillna with median if NA
     if df['dist_to_nearest_road_m'].isna().any():
-        df['dist_to_nearest_road_m'] = df['dist_to_nearest_road_m'].fillna(df['dist_to_nearest_road_m'].median())
+        median_val = df['dist_to_nearest_road_m'].median()
+        df['dist_to_nearest_road_m'] = df['dist_to_nearest_road_m'].fillna(median_val if pd.notna(median_val) else 0.0)
 
     # 5. Calculate severity score (used mostly by the app's 3D heatmap, 1-3 scale)
     if 'requires_road_closure' in df.columns:

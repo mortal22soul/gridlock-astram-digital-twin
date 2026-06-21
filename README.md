@@ -17,6 +17,9 @@ Instead of relying heavily on expensive, delayed camera-feed analyses, this prot
   - `Classifier`: Predicts the probability that an event requires a road closure. Achieves a powerful **0.80+ AUC**.
   - `Regressor`: Predicts the exact duration (in minutes) to clear the incident. Features an incredible **~20-30 minute Median Absolute Error** for standard acute emergencies (like vehicle breakdowns and accidents), while correctly modeling the heavy-tailed variance of 48-hour infrastructure failures (like water logging and deep potholes).
   - *Note:* Both models natively support categorical groupings via Pandas `category` dtypes or native CatBoost features, and they share a strictly unified DRY feature engineering pipeline (`app/feature_engineering.py`).
+- **Live Digital Twin Context (APIs):**
+  - **TomTom Real-Time Traffic Integration:** Live context overlay dynamically fetching road speeds for the active corridor.
+  - **Open-Meteo Live Weather:** Automated weather feature extraction replacing manual precipitation guesswork.
 - **Rule-Based Resource Engine:** Translates predicted severity buckets into actionable ground deployments so the Control Room can act instantly.
 - **Geospatial Risk Heatmap:** Visualizes historical hotspots across the Bengaluru road network using Folium.
 - **OSM & Weather Enrichment:** Automatically fetches hourly precipitation from Open-Meteo and incorporates OpenStreetMap road infrastructure (e.g., highway class, lanes) via a rapid `GeoPandas` nearest-neighbor spatial join for enhanced modeling signal.
@@ -28,17 +31,22 @@ Instead of relying heavily on expensive, delayed camera-feed analyses, this prot
 ├── app/
 │   ├── app.py             # Main Streamlit Command Center entry point
 │   ├── components.py      # Map rendering and UI visualization modules
+│   ├── feature_engineering.py # Unified DRY pipeline for data transformations
 │   └── heuristics.py      # Rule-based resource allocation engine
 ├── notebooks/
 │   ├── 01_eda_and_cleaning.ipynb      # Data ingestion, cleaning, OSM & Weather enrichment
-│   └── 02_model_training.ipynb        # Walk-forward splits, XGBoost modeling with OSM features
-├── docs/
-│   ├── PRESENTATION.md    # 10-slide pitch deck outline
-│   └── VIDEO_SCRIPT.md    # Demo video script
+│   ├── 02_xgboost_model_training.ipynb        # XGBoost modeling & evaluation
+│   └── 03_catboost_model_training.ipynb # CatBoost dual-engine modeling
+├── scripts/
+│   └── inference.py       # Standalone testing utility for head-to-head XGBoost vs CatBoost comparison
 ├── data/                  # Augmented datasets (OSM + Weather)
-├── models/                # Serialized XGBoost models (.json) & Label Encoders
+│   ├── augmented_astram_events.csv # Cleaned & enriched dataset
+│   ├── export.geojson # Exported GeoJSON file for the model
+├── models/
+│   ├── duration_model.json / closure_model.json # Serialized XGBoost models
+│   ├── duration_model_cb.cbm / closure_model_cb.cbm # Serialized CatBoost models
+│   └── category_mappings.json # Standardized vocabulary for native categorical features
 ├── requirements.txt       # Core dependencies
-├── SUBMISSION.md          # Hackathon submission template
 └── README.md              # You are here!
 ```
 
@@ -65,11 +73,16 @@ The models are already pre-trained and serialized in the `/models` directory. Ho
 
 ```powershell
 uv run jupyter nbconvert --to notebook --execute notebooks/01_eda_and_cleaning.ipynb --inplace
-uv run jupyter nbconvert --to notebook --execute notebooks/02_model_training.ipynb --inplace
+uv run jupyter nbconvert --to notebook --execute notebooks/02_xgboost_model_training.ipynb --inplace
 uv run jupyter nbconvert --to notebook --execute notebooks/03_catboost_model_training.ipynb --inplace
 ```
 
-### 3. Launching the Command Center Dashboard
+### 3. Setup Secrets & Launch Command Center
+
+Create a `.env.local` file in the root directory (you can copy `.env.example`) and add your TomTom API key:
+```ini
+TOMTOM_API_KEY="your_api_key_here"
+```
 
 To boot up the live Streamlit dashboard:
 
@@ -77,7 +90,7 @@ To boot up the live Streamlit dashboard:
 uv run streamlit run app/app.py
 ```
 
-_The app will be served locally at `http://localhost:8501`._
+*The app will be served locally at `http://localhost:8501`.*
 
 ## 🧠 Modeling Strategy
 
@@ -90,5 +103,5 @@ We chose an **XGBoost tabular architecture** over deep learning due to the spars
 ## 🛠 Tech Stack
 
 - **Data Processing:** `Pandas`, `NumPy`, `GeoPandas`, `Shapely`, `SciPy`
-- **Machine Learning:** `XGBoost`, `Scikit-Learn`, `SHAP`
+- **Machine Learning:** `XGBoost`, `CatBoost`, `Scikit-Learn`, `SHAP`
 - **Frontend / Dashboard:** `Streamlit`, `Plotly`, `Folium`, `streamlit-folium`
