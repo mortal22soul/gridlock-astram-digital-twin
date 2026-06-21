@@ -72,9 +72,9 @@ def _severity_bucket(priority: str, clos_prob: float) -> int:
     nuanced bucket for borderline cases, e.g. High-priority events near the
     closure-probability boundary stay at Medium instead of jumping to High.
     """
-    if priority == 'High' and clos_prob >= 0.6:
+    if priority == 'High' and clos_prob >= 0.45:
         return 2   # High
-    elif priority == 'High' or clos_prob >= 0.4:
+    elif priority == 'High' or clos_prob >= 0.25:
         return 1   # Medium
     return 0       # Low
 
@@ -102,9 +102,16 @@ st.markdown("Predictive layer for early incident mitigation and resource allocat
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.subheader("Historical Risk Heatmap (3D Hexagon)")
-    deck = components.render_heatmap(df)
-    st.pydeck_chart(deck)
+    st.subheader("Historical Risk Heatmap")
+    
+    map_view = st.radio("Map View", ["3D Hexagon", "2D Heatmap"], horizontal=True, label_visibility="collapsed")
+    if map_view == "3D Hexagon":
+        deck = components.render_heatmap(df)
+        st.pydeck_chart(deck)
+    else:
+        from streamlit_folium import st_folium
+        m = components.render_2d_heatmap(df)
+        st_folium(m, height=400, use_container_width=True, returned_objects=[])
 
     st.plotly_chart(components.plot_trend(df), width='stretch')
 

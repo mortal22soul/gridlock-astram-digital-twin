@@ -66,6 +66,7 @@ The models are already pre-trained and serialized in the `/models` directory. Ho
 ```powershell
 uv run jupyter nbconvert --to notebook --execute notebooks/01_eda_and_cleaning.ipynb --inplace
 uv run jupyter nbconvert --to notebook --execute notebooks/02_model_training.ipynb --inplace
+uv run jupyter nbconvert --to notebook --execute notebooks/03_catboost_model_training.ipynb --inplace
 ```
 
 ### 3. Launching the Command Center Dashboard

@@ -60,6 +60,25 @@ def render_heatmap(df: pd.DataFrame) -> pdk.Deck:
     return deck
 
 
+def render_2d_heatmap(df: pd.DataFrame):
+    """Render a standard Leaflet (Folium) 2D Heatmap."""
+    import folium
+    from folium.plugins import HeatMap
+
+    clean_df = df.dropna(subset=['latitude', 'longitude'])
+    clean_df = clean_df[
+        (clean_df['latitude']  > _LAT_MIN) & (clean_df['latitude']  < _LAT_MAX) &
+        (clean_df['longitude'] > _LON_MIN) & (clean_df['longitude'] < _LON_MAX)
+    ]
+
+    m = folium.Map(location=[12.9716, 77.5946], zoom_start=11, tiles="CartoDB dark_matter")
+    if not clean_df.empty:
+        heat_data = clean_df[['latitude', 'longitude', 'severity_score']].values.tolist()
+        HeatMap(heat_data, radius=15, blur=10).add_to(m)
+    
+    return m
+
+
 def plot_trend(df: pd.DataFrame):
     """Return a Plotly line chart of daily incident counts."""
     if df.empty or 'start_datetime' not in df.columns:
