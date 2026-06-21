@@ -32,6 +32,19 @@ def load_models():
 def load_data() -> pd.DataFrame:
     df = pd.read_csv(DATA_PATH)
     df['start_datetime'] = pd.to_datetime(df['start_datetime'], utc=True)
+    df = df.dropna(subset=['start_datetime'])
+    df = df.sort_values('start_datetime').reset_index(drop=True)
+
+    # Recreate the rolling counts features here since they aren't saved in the CSV
+    df['corridor'] = df['corridor'].fillna('Unknown')
+    df_temp = df.set_index('start_datetime')
+    rolling_1d = df_temp.groupby('corridor', dropna=False).rolling('1D')['id'].count().reset_index(name='count_1d')
+    rolling_7d = df_temp.groupby('corridor', dropna=False).rolling('7D')['id'].count().reset_index(name='count_7d')
+    rolling_30d = df_temp.groupby('corridor', dropna=False).rolling('30D')['id'].count().reset_index(name='count_30d')
+
+    df['corridor_count_1d'] = rolling_1d['count_1d'].values - 1
+    df['corridor_count_7d'] = rolling_7d['count_7d'].values - 1
+    df['corridor_count_30d'] = rolling_30d['count_30d'].values - 1
 
     # Derive a severity_score for the heatmap weight:
     # High priority + closure → 3, High priority only → 2, Low → 1
