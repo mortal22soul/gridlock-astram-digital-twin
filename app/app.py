@@ -5,6 +5,7 @@ import xgboost as xgb
 import json
 import components
 from heuristics import get_resource_recommendation
+from feature_engineering import engineer_features
 import os
 
 st.set_page_config(page_title="ASTraM Digital Twin Command Center", layout="wide", page_icon="🚦")
@@ -16,45 +17,29 @@ DATA_PATH = os.path.join(BASE_DIR, '../data/augmented_astram_events.csv')
 
 @st.cache_resource
 def load_models():
-    duration_model = xgb.XGBRegressor()
-    duration_model.load_model(os.path.join(BASE_DIR, '../models/duration_model.json'))
+    dur_xgb = xgb.XGBRegressor()
+    dur_xgb.load_model(os.path.join(BASE_DIR, '../models/duration_model.json'))
 
-    closure_model = xgb.XGBClassifier()
-    closure_model.load_model(os.path.join(BASE_DIR, '../models/closure_model.json'))
+    clos_xgb = xgb.XGBClassifier()
+    clos_xgb.load_model(os.path.join(BASE_DIR, '../models/closure_model.json'))
+
+    from catboost import CatBoostRegressor, CatBoostClassifier
+    dur_cb = CatBoostRegressor()
+    dur_cb.load_model(os.path.join(BASE_DIR, '../models/duration_model_cb.cbm'))
+
+    clos_cb = CatBoostClassifier()
+    clos_cb.load_model(os.path.join(BASE_DIR, '../models/closure_model_cb.cbm'))
 
     with open(os.path.join(BASE_DIR, '../models/category_mappings.json'), 'r') as f:
         cat_mappings = json.load(f)
 
-    return duration_model, closure_model, cat_mappings
+    return dur_xgb, clos_xgb, dur_cb, clos_cb, cat_mappings
 
 
 @st.cache_data
 def load_data() -> pd.DataFrame:
     df = pd.read_csv(DATA_PATH)
-    df['start_datetime'] = pd.to_datetime(df['start_datetime'], utc=True)
-    df = df.dropna(subset=['start_datetime'])
-    df = df.sort_values('start_datetime').reset_index(drop=True)
-
-    # Recreate the rolling counts features here since they aren't saved in the CSV
-    df['corridor'] = df['corridor'].fillna('Unknown')
-    df_temp = df.set_index('start_datetime')
-    rolling_1d = df_temp.groupby('corridor', dropna=False).rolling('1D')['id'].count().reset_index(name='count_1d')
-    rolling_7d = df_temp.groupby('corridor', dropna=False).rolling('7D')['id'].count().reset_index(name='count_7d')
-    rolling_30d = df_temp.groupby('corridor', dropna=False).rolling('30D')['id'].count().reset_index(name='count_30d')
-
-    df['corridor_count_1d'] = rolling_1d['count_1d'].values - 1
-    df['corridor_count_7d'] = rolling_7d['count_7d'].values - 1
-    df['corridor_count_30d'] = rolling_30d['count_30d'].values - 1
-
-    # Derive a severity_score for the heatmap weight:
-    # High priority + closure → 3, High priority only → 2, Low → 1
-    if 'severity_score' not in df.columns:
-        conditions = [
-            (df['priority'] == 'High') & (df['requires_road_closure'] is True),
-            (df['priority'] == 'High'),
-        ]
-        df['severity_score'] = np.select(conditions, [3, 2], default=1)
-    return df
+    return engineer_features(df)
 
 
 
@@ -96,12 +81,12 @@ def _severity_bucket(priority: str, clos_prob: float) -> int:
 
 # ── Guard: models must exist before rendering anything else ──────────────────
 
-if not os.path.exists(os.path.join(BASE_DIR, '../models/duration_model.json')):
+if not os.path.exists(os.path.join(BASE_DIR, '../models/duration_model.json')) or not os.path.exists(os.path.join(BASE_DIR, '../models/duration_model_cb.cbm')):
     st.warning("Models not found. Please run the Jupyter notebooks in `notebooks/` first.")
     st.stop()
 
 try:
-    dur_model, clos_model, cat_mappings = load_models()
+    dur_xgb, clos_xgb, dur_cb, clos_cb, cat_mappings = load_models()
     df = load_data()
 except Exception as e:
     st.error(f"Error loading models or data: {e}")
@@ -126,6 +111,7 @@ with col1:
 with col2:
     st.subheader("Incident Simulator")
     with st.form("simulator_form"):
+        engine    = st.radio("Model Engine", ["CatBoost", "XGBoost"], horizontal=True)
         cause     = st.selectbox("Event Cause", sorted(df['event_cause'].dropna().unique()))
         corridor  = st.selectbox("Corridor",    sorted(df['corridor'].dropna().unique()))
         priority  = st.selectbox("Priority", ['High', 'Low'])
@@ -193,7 +179,8 @@ with col2:
         }
         features_df = pd.DataFrame([row], columns=feature_names)
 
-        # Apply the same CategoricalDtype used during training
+        # Apply the same CategoricalDtype used during XGBoost training
+        # (CatBoost safely accepts and handles these natively as well)
         for col in ['event_cause', 'corridor', 'priority', 'osm_highway_class']:
             cat_type = pd.CategoricalDtype(
                 categories=cat_mappings[col], ordered=False
@@ -202,8 +189,13 @@ with col2:
 
         # -- Predictions -------------------------------------------------------
 
-        clos_prob    = float(clos_model.predict_proba(features_df)[0][1])
-        dur_log      = float(dur_model.predict(features_df)[0])
+        if engine == "CatBoost":
+            clos_prob    = float(clos_cb.predict_proba(features_df)[0][1])
+            dur_log      = float(dur_cb.predict(features_df)[0])
+        else:
+            clos_prob    = float(clos_xgb.predict_proba(features_df)[0][1])
+            dur_log      = float(dur_xgb.predict(features_df)[0])
+
         dur_minutes  = float(np.expm1(dur_log))
 
         # Severity bucket uses continuous clos_prob, not a hard 0.5 threshold

@@ -13,8 +13,10 @@ Instead of relying heavily on expensive, delayed camera-feed analyses, this prot
 
 ## ✨ Key Features
 
-- **Duration Forecasting Model (XGBoost Regressor):** Predicts how many minutes an incident will take to resolve, factoring in cause, corridor, priority, day of week, and historical rolling averages.
-- **Closure Probability Model (XGBoost Classifier):** Calculates the percentage risk that a specific event will necessitate a carriageway closure. Achieves a strong **0.76 AUC** baseline.
+- **Modeling:** Trains dual sets of models (XGBoost and CatBoost) so you can toggle between engines in real-time. A standalone `scripts/inference.py` utility is included for head-to-head testing.
+  - `Classifier`: Predicts the probability that an event requires a road closure. Achieves a powerful **0.80+ AUC**.
+  - `Regressor`: Predicts the exact duration (in minutes) to clear the incident. Features an incredible **~20-30 minute Median Absolute Error** for standard acute emergencies (like vehicle breakdowns and accidents), while correctly modeling the heavy-tailed variance of 48-hour infrastructure failures (like water logging and deep potholes).
+  - *Note:* Both models natively support categorical groupings via Pandas `category` dtypes or native CatBoost features, and they share a strictly unified DRY feature engineering pipeline (`app/feature_engineering.py`).
 - **Rule-Based Resource Engine:** Translates predicted severity buckets into actionable ground deployments so the Control Room can act instantly.
 - **Geospatial Risk Heatmap:** Visualizes historical hotspots across the Bengaluru road network using Folium.
 - **OSM & Weather Enrichment:** Automatically fetches hourly precipitation from Open-Meteo and incorporates OpenStreetMap road infrastructure (e.g., highway class, lanes) via a rapid `GeoPandas` nearest-neighbor spatial join for enhanced modeling signal.

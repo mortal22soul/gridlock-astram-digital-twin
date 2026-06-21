@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "catboost>=1.2.10",
     "fiona>=1.10.1",
     "folium>=0.20.0",
     "geopandas>=1.1.3",
