@@ -102,7 +102,7 @@ except Exception as e:
 
 # ── Page header ──────────────────────────────────────────────────────────────
 
-st.title("🚦 ASTraM Mobility Digital Twin Command Center")
+st.header("🚦 ASTraM Mobility Digital Twin Command Center")
 st.markdown("Predictive layer for early incident mitigation and resource allocation.")
 
 # ── Two-column layout ────────────────────────────────────────────────────────
@@ -141,9 +141,9 @@ with col2:
         
         if weather_success:
             w_col1, w_col2, w_col3 = st.columns(3)
-            w_col1.metric("Weather", weather_data["description"])
-            w_col2.metric("Temp", f"{weather_data['temperature_c']}°C")
-            w_col3.metric("Rain", f"{weather_data['precipitation_mm']} mm")
+            w_col1.markdown(f"<div style='font-size: 14px; color: gray;'>Weather</div><div style='font-size: 22px; font-weight: bold;'>{weather_data['description']}</div>", unsafe_allow_html=True)
+            w_col2.markdown(f"<div style='font-size: 14px; color: gray;'>Temp</div><div style='font-size: 22px; font-weight: bold;'>{weather_data['temperature_c']}°C</div>", unsafe_allow_html=True)
+            w_col3.markdown(f"<div style='font-size: 14px; color: gray;'>Rain</div><div style='font-size: 22px; font-weight: bold;'>{weather_data['precipitation_mm']} mm</div>", unsafe_allow_html=True)
         st.markdown("---")
         
     if weather_data and weather_data.get("error"):
@@ -161,16 +161,16 @@ with col2:
             
         priority  = st.selectbox("Priority", ['High', 'Low'])
 
-        hour      = st.slider("Hour of Day", 0, 23, 12)
-        
         f_col3, f_col4 = st.columns(2)
         with f_col3:
+            hour      = st.slider("Hour of Day", 0, 23, 12)
+        with f_col4:
             day_mapping = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
             day_str   = st.selectbox("Day of Week", list(day_mapping.keys()))
             dayofweek = day_mapping[day_str]
-        with f_col4:
-            default_precip = float(weather_data['precipitation_mm']) if weather_success else 0.0
-            precip    = st.number_input("Expected Rain (mm/hr) - Pre-filled with Live Data", min_value=0.0, max_value=50.0, value=default_precip, step=0.1)
+            
+        default_precip = float(weather_data['precipitation_mm']) if weather_success else 0.0
+        precip    = st.number_input("Expected Rain (mm/hr) - Pre-filled with Live Data", min_value=0.0, max_value=50.0, value=default_precip, step=0.1)
 
         # Compute dynamic spatial defaults based on the selected corridor
         corridor_df = df[df['corridor'] == corridor]
@@ -194,7 +194,7 @@ with col2:
             osm_lanes = st.number_input("OSM Lanes", min_value=1.0, max_value=10.0, value=def_lanes, step=1.0)
             dist_road = st.number_input("Distance to Nearest Road (m)", min_value=0.0, value=def_dist, step=0.1)
 
-        submitted = st.form_submit_button("Simulate Impact")
+        submitted = st.form_submit_button("Simulate Impact", use_container_width=True)
 
     if submitted:
         is_weekend = 1 if dayofweek in [5, 6] else 0
