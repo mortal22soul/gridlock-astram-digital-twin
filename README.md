@@ -16,7 +16,7 @@ Instead of relying heavily on expensive, delayed camera-feed analyses, this prot
 - **Modeling:** Trains dual sets of models (XGBoost and CatBoost) so you can toggle between engines in real-time. A standalone `scripts/inference.py` utility is included for head-to-head testing.
   - `Classifier`: Predicts the probability that an event requires a road closure. Achieves a powerful **0.80+ AUC**.
   - `Regressor`: Predicts the exact duration (in minutes) to clear the incident. Features an incredible **~20-30 minute Median Absolute Error** for standard acute emergencies (like vehicle breakdowns and accidents), while correctly modeling the heavy-tailed variance of 48-hour infrastructure failures (like water logging and deep potholes).
-  - *Note:* Both models natively support categorical groupings via Pandas `category` dtypes or native CatBoost features, and they share a strictly unified DRY feature engineering pipeline (`app/feature_engineering.py`).
+  - _Note:_ Both models natively support categorical groupings via Pandas `category` dtypes or native CatBoost features, and they share a strictly unified DRY feature engineering pipeline (`app/feature_engineering.py`).
 - **Live Digital Twin Context (APIs):**
   - **TomTom Real-Time Traffic Integration:** Live context overlay dynamically fetching road speeds for the active corridor.
   - **Open-Meteo Live Weather:** Automated weather feature extraction replacing manual precipitation guesswork.
@@ -29,10 +29,14 @@ Instead of relying heavily on expensive, delayed camera-feed analyses, this prot
 
 ```bash
 ├── app/
+│   ├── __init__.py        # Package initializer
 │   ├── app.py             # Main Streamlit Command Center entry point
 │   ├── components.py      # Map rendering and UI visualization modules
 │   ├── feature_engineering.py # Unified DRY pipeline for data transformations
-│   └── heuristics.py      # Rule-based resource allocation engine
+│   ├── heuristics.py      # Rule-based resource allocation engine
+│   ├── holidays.py        # Date-based public holiday heuristic checks
+│   ├── traffic.py         # Real-time TomTom Flow API integration
+│   └── weather.py         # Real-time Open-Meteo API integration
 ├── notebooks/
 │   ├── 01_eda_and_cleaning.ipynb      # Data ingestion, cleaning, OSM & Weather enrichment
 │   ├── 02_xgboost_model_training.ipynb        # XGBoost modeling & evaluation
@@ -41,12 +45,14 @@ Instead of relying heavily on expensive, delayed camera-feed analyses, this prot
 │   └── inference.py       # Standalone testing utility for head-to-head XGBoost vs CatBoost comparison
 ├── data/                  # Augmented datasets (OSM + Weather)
 │   ├── augmented_astram_events.csv # Cleaned & enriched dataset
-│   ├── export.geojson # Exported GeoJSON file for the model
+│   └── export.geojson     # Exported GeoJSON file for the model
 ├── models/
 │   ├── duration_model.json / closure_model.json # Serialized XGBoost models
 │   ├── duration_model_cb.cbm / closure_model_cb.cbm # Serialized CatBoost models
 │   └── category_mappings.json # Standardized vocabulary for native categorical features
-├── requirements.txt       # Core dependencies
+├── .env.example           # Template for API keys
+├── pyproject.toml         # uv dependency definitions
+├── requirements.txt       # Core dependencies for legacy pip setups
 └── README.md              # You are here!
 ```
 
@@ -80,6 +86,7 @@ uv run jupyter nbconvert --to notebook --execute notebooks/03_catboost_model_tra
 ### 3. Setup Secrets & Launch Command Center
 
 Create a `.env.local` file in the root directory (you can copy `.env.example`) and add your TomTom API key:
+
 ```ini
 TOMTOM_API_KEY="your_api_key_here"
 ```
@@ -90,7 +97,7 @@ To boot up the live Streamlit dashboard:
 uv run streamlit run app/app.py
 ```
 
-*The app will be served locally at `http://localhost:8501`.*
+_The app will be served locally at `http://localhost:8501`._
 
 ## 🧠 Modeling Strategy
 

@@ -132,17 +132,22 @@ with col2:
     weather_data = get_current_weather()
     holiday = get_holiday_context(sim_date)
     
-    if weather_data or holiday:
+    weather_success = weather_data is not None and not weather_data.get("error")
+    
+    if weather_success or holiday:
         st.markdown("##### 🌍 Live Context")
         if holiday:
             st.warning(f"⚠️ **Major Event Today:** {holiday}. Expect abnormal traffic patterns.")
         
-        if weather_data:
+        if weather_success:
             w_col1, w_col2, w_col3 = st.columns(3)
             w_col1.metric("Weather", weather_data["description"])
             w_col2.metric("Temp", f"{weather_data['temperature_c']}°C")
             w_col3.metric("Rain", f"{weather_data['precipitation_mm']} mm")
         st.markdown("---")
+        
+    if weather_data and weather_data.get("error"):
+        st.warning(f"⚠️ Could not fetch live weather from Open-Meteo ({weather_data['error']}). Falling back to manual defaults.")
     # --------------------
 
     with st.form("simulator_form"):
@@ -164,7 +169,7 @@ with col2:
             day_str   = st.selectbox("Day of Week", list(day_mapping.keys()))
             dayofweek = day_mapping[day_str]
         with f_col4:
-            default_precip = float(weather_data['precipitation_mm']) if weather_data else 0.0
+            default_precip = float(weather_data['precipitation_mm']) if weather_success else 0.0
             precip    = st.number_input("Expected Rain (mm/hr) - Pre-filled with Live Data", min_value=0.0, max_value=50.0, value=default_precip, step=0.1)
 
         # Compute dynamic spatial defaults based on the selected corridor

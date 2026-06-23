@@ -19,8 +19,8 @@ WMO_CODES = {
     96: "Thunderstorm with slight hail", 99: "Thunderstorm with heavy hail"
 }
 
-@st.cache_data(ttl=600)
-def get_current_weather() -> dict | None:
+@st.cache_data(ttl=600, show_spinner=False)
+def get_current_weather():
     """Fetches real-time weather data for Bengaluru from Open-Meteo."""
     url = (
         "https://api.open-meteo.com/v1/forecast"
@@ -41,8 +41,10 @@ def get_current_weather() -> dict | None:
                 "wind_speed_kmh": curr.get("wind_speed_10m", 0.0),
                 "weather_code": curr.get("weather_code", 0),
                 "description": WMO_CODES.get(curr.get("weather_code", 0), "Unknown"),
-                "timestamp": datetime.datetime.now().strftime("%I:%M %p")
+                "timestamp": datetime.datetime.now().strftime("%I:%M %p"),
+                "error": None
             }
-    except requests.exceptions.RequestException:
-        pass
-    return None
+        else:
+            return {"error": f"API returned status {resp.status_code}"}
+    except Exception as e:
+        return {"error": f"Exception: {str(e)}"}
